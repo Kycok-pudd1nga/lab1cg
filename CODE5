@@ -1,0 +1,455 @@
+#ifndef MESH_H
+#define MESH_H
+
+
+#include <glm.hpp>
+#include <gtc/matrix_transform.hpp>
+
+#include "GL/glew.h"
+#include "GLFW/glfw3.h"
+
+#include <vector>
+#include <glm.hpp>
+
+using namespace std;
+
+struct Vertex {
+    // position
+    glm::vec3 Position;
+    // normal
+    glm::vec3 Normal;      
+};
+
+class Mesh {
+public:
+    vector <Vertex>       vertices;
+    vector <unsigned int> indices;
+    unsigned int VAO;
+
+    Mesh(vector<Vertex> vertices, vector<unsigned int> indices)
+    {
+        this->vertices = vertices;
+        this->indices = indices;
+
+        setupMesh();
+    }
+
+    void Draw()
+    {
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()),GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+    }
+
+private:
+    unsigned int VBO, EBO;
+
+    void setupMesh()
+    {
+        GLuint vbo, vao;
+        glGenBuffers(1, &VBO);
+        glGenVertexArrays(1, &VAO);
+        glBindVertexArray(VAO);
+        
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+
+        glBufferData(GL_ARRAY_BUFFER, vertices.size()* sizeof(float), &vertices, GL_STATIC_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, vertices.size() * sizeof(float), &vertices, GL_STATIC_DRAW);
+        
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        
+
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
+
+        
+    }
+};
+#endif
+
+
+____________________________________________________________________________________________________________
+
+
+
+#define GLEW_DLL
+#define GLFW_DLL
+#define MODEL_H
+#define MODEL_H
+#define MESH_H
+#define MESH_H
+
+#include <iostream>
+#include <cmath>
+#include "GL/glew.h"
+#include "GLFW/glfw3.h"
+#include "glm/glm.hpp"
+#include "glm/gtc/matrix_transform.hpp"
+#include "glm/gtc/type_ptr.hpp"
+
+
+
+float vertices[] = {
+    0.0f,  0.0f, 0.0f,
+    0.0f,  0.5f, 0.0f,
+    0.15f, 0.15f, 0.0f,
+    0.5f,  0.0f, 0.0f,
+    0.15f, -0.15f, 0.0f,
+    0.0f, -0.5f, 0.0f,
+    -0.15f, -0.15f, 0.0f,
+    -0.5f,  0.0f, 0.0f,
+    -0.15f, 0.15f, 0.0f,
+    0.0f,  0.5f, 0.0f
+};
+
+void setMat4(GLuint ID, const std::string& name, const glm::mat4& mat) {
+    glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, glm::value_ptr(mat));
+}
+
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+
+void framebuffer_size_callback(GLFWwindow* window, int  width, int height);
+void mouse_callback(GLFWwindow* window, double  xpos, double ypos);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+void processInput(GLFWwindow* win);
+
+
+const unsigned int SCR_WIDTH = 1024;
+const unsigned int SCR_HEIGHT = 768;
+
+float   lastX = SCR_WIDTH / 2, 
+        lastY = SCR_HEIGHT / 2;
+
+bool firstMouse = true;
+float yaw = -90.0f;
+float pitch = 0.0f;
+float fov = 45.0f;
+
+
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
+
+void processInput(GLFWwindow* win);
+
+int main() {
+    if (!glfwInit()) {
+        std::cerr << "ERROR glfwInit" << std::endl;
+        return -1;
+    }
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    GLFWwindow* window = glfwCreateWindow(512, 512, "WINWIN", NULL, NULL);
+    if (!window) {
+        glfwTerminate();
+        return -2;
+    }
+
+    glfwMakeContextCurrent(window);
+    glewExperimental = GL_TRUE;
+    if (glewInit() != GLEW_OK) {
+        std::cerr << "ERROR glewInit" << std::endl;
+        return -3;
+    }
+
+
+    GLuint vbo, vao;
+    glGenBuffers(1, &vbo);
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+    
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetScrollCallback(window, scroll_callback);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+    
+    const char* vert_shader = R"(
+        #version 410 core
+        layout (location=0) in vec3 vp;
+        layout (location=1) in vec3 aNormal;
+        uniform mat4 projection;
+        uniform mat4 view;
+        uniform mat4 model;
+        uniform mat4 transform;
+        out vec3 Normal;
+        void main() {
+            gl_Position = projection * view * model * transform * vec4(vp, 1.0);
+            Normal =aNormal;
+        }
+    )";
+
+    const char* frag_shader = R"(
+        #version 410 core
+        in vec3 Normal;
+
+        uniform float time;
+
+        out vec4 myColor;
+
+        void main() {
+            float r = (sin(time) + 1.0) / 2.0;
+            float g = (cos(time * 0.7) + 1.0) / 2.0;
+            float b = (sin(time * 1.3) + 1.0) / 2.0;
+            myColor = vec4(r, g, b, 1.0);
+        }
+    )";
+
+    GLuint vertS = glCreateShader(GL_VERTEX_SHADER);
+    GLuint fragS = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(vertS, 1, &vert_shader, NULL);
+    glShaderSource(fragS, 1, &frag_shader, NULL);
+    glCompileShader(vertS);
+    glCompileShader(fragS);
+
+    GLint success;
+    GLchar infoLog[512];
+    glGetShaderiv(vertS, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(vertS, 512, NULL, infoLog);
+        std::cerr << "Vertex shader error:\n" << infoLog << std::endl;
+    }
+    glGetShaderiv(fragS, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(fragS, 512, NULL, infoLog);
+        std::cerr << "Fragment shader error:\n" << infoLog << std::endl;
+    }
+
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vertS);
+    glAttachShader(program, fragS);
+    glLinkProgram(program);
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
+        std::cerr << "Linking error:\n" << infoLog << std::endl;
+    }
+    glDeleteShader(vertS);
+    glDeleteShader(fragS);
+
+    GLint timeLoc = glGetUniformLocation(program, "time");
+
+  
+
+    while (!glfwWindowShouldClose(window)) {
+        float timeValue = glfwGetTime();
+
+        processInput(window);
+
+        float currentFrame = static_cast<float>(glfwGetTime());
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
+        glm::mat4 projection = glm::perspective(glm::radians(fov), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+
+        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+
+        glm::mat4 model = glm::mat4(1.0f);
+        glm::mat4 transform = glm::mat4(1.0f);
+
+        glUseProgram(program);
+        glUniform1f(timeLoc, timeValue);
+        setMat4(program, "projection", projection);
+        setMat4(program, "view", view);
+        setMat4(program, "model", model);
+        setMat4(program, "transform", transform);
+
+        glClearColor(0.1f, 0.2f, 0.1f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glBindVertexArray(vao);
+       
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 10);
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &vbo);
+    glDeleteProgram(program);
+    glfwTerminate();
+    return 0;
+}
+
+void processInput(GLFWwindow* win) {
+
+    const float cameraSpeed = 2.5f *deltaTime;
+    if (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS)
+        cameraPos += cameraSpeed * cameraFront;
+
+    if (glfwGetKey(win, GLFW_KEY_S) == GLFW_PRESS)
+        cameraPos-= cameraSpeed * cameraFront;
+
+    if (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS)
+       cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp))*cameraSpeed;
+
+    if (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS)
+        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+
+}
+
+
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
+{
+       
+    float xpos = static_cast<float>(xposIn);
+    float ypos = static_cast<float>(yposIn);
+
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos;  
+    lastX = xpos;
+    lastY = ypos;
+
+    float sensitivity = 0.05f;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    yaw += xoffset;
+    pitch += yoffset;
+
+   
+    if (pitch > 89.0f)
+        pitch = 89.0f;
+    if (pitch < -89.0f)
+        pitch = -89.0f;
+
+    glm::vec3 front;
+    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front.y = sin(glm::radians(pitch));
+    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    cameraFront = glm::normalize(front);
+}
+
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    fov -= (float)yoffset;
+    if (fov < 1.0f)
+        fov = 1.0f;
+    if (fov > 45.0f)
+        fov = 45.0f;
+}
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+{
+    glViewport(0, 0, width, height);
+}
+
+
+_________________________________________________________________________________________________
+
+
+
+#ifndef MODEL_H
+#define MODEL_H
+
+
+
+
+#include <glm.hpp>
+#include <gtc/matrix_transform.hpp>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+
+#include "Mesh.h"
+
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <iostream>
+#include <vector>
+using namespace std;
+
+class Model
+{
+public:
+    
+    vector<Mesh> meshes;
+    string directory;
+        
+    Model(string const& path) 
+    {
+        loadModel(path);
+    }
+       
+    void Draw()
+    {
+        -
+    }
+
+private:
+    
+    void loadModel(string const& path)
+    {
+        Assimp::Importer importer;
+        
+        directory = path.substr(0, path.find_last_not_of('/'));
+        
+        const aiScene* scene = importer.ReadFile(directory,
+            aiProcess_CalcTangentSpace |
+            aiProcess_Triangulate |
+            aiProcess_JoinIdenticalVertices |
+            aiProcess_SortByPType);
+
+       
+        if (nullptr == scene) {
+            fprintf(stderr, "error ASSimp %s\n", importer.GetErrorString());
+        }
+
+      
+        processNode(scene->mRootNode, scene);
+    }
+        
+    void processNode(aiNode* node, const aiScene* scene)
+    {
+        for (unsigned int i = 0; i < node->mNumMeshes; i++)
+        {
+            aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+            meshes.push_back(processMesh(mesh, scene));
+        }
+
+        for (unsigned int i = 0; i < node->mNumChildren; i++)
+        {
+            processNode(node->mChildren[i], scene);
+        }
+
+    }
+
+    Mesh processMesh(aiMesh* mesh, const aiScene* scene)
+    {
+        return Mesh(vertices, indices);
+    }        
+};
+
+#endif
+____________________________________________________________
+GPT ДОПИШЕТ (ЛАСТ СТР УЖЕ ЕСТЬ)
+
+
+
+
+
