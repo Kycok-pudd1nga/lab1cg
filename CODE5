@@ -1,80 +1,3 @@
-#ifndef MESH_H
-#define MESH_H
-
-
-#include <glm.hpp>
-#include <gtc/matrix_transform.hpp>
-
-#include "GL/glew.h"
-#include "GLFW/glfw3.h"
-
-#include <vector>
-#include <glm.hpp>
-
-using namespace std;
-
-struct Vertex {
-    // position
-    glm::vec3 Position;
-    // normal
-    glm::vec3 Normal;      
-};
-
-class Mesh {
-public:
-    vector <Vertex>       vertices;
-    vector <unsigned int> indices;
-    unsigned int VAO;
-
-    Mesh(vector<Vertex> vertices, vector<unsigned int> indices)
-    {
-        this->vertices = vertices;
-        this->indices = indices;
-
-        setupMesh();
-    }
-
-    void Draw()
-    {
-        glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()),GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
-    }
-
-private:
-    unsigned int VBO, EBO;
-
-    void setupMesh()
-    {
-        GLuint vbo, vao;
-        glGenBuffers(1, &VBO);
-        glGenVertexArrays(1, &VAO);
-        glBindVertexArray(VAO);
-        
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-
-        glBufferData(GL_ARRAY_BUFFER, vertices.size()* sizeof(float), &vertices, GL_STATIC_DRAW);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, vertices.size() * sizeof(float), &vertices, GL_STATIC_DRAW);
-        
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        
-
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
-
-        
-    }
-};
-#endif
-
-
-____________________________________________________________________________________________________________
-
-
-
 #define GLEW_DLL
 #define GLFW_DLL
 #define MODEL_H
@@ -89,6 +12,7 @@ ________________________________________________________________________________
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
+#include "Model.h"
 
 
 
@@ -123,8 +47,8 @@ void processInput(GLFWwindow* win);
 const unsigned int SCR_WIDTH = 1024;
 const unsigned int SCR_HEIGHT = 768;
 
-float   lastX = SCR_WIDTH / 2, 
-        lastY = SCR_HEIGHT / 2;
+float   lastX = SCR_WIDTH / 2,
+lastY = SCR_HEIGHT / 2;
 
 bool firstMouse = true;
 float yaw = -90.0f;
@@ -161,6 +85,7 @@ int main() {
         return -3;
     }
 
+    Model ourRTC("lab3d.blend");
 
     GLuint vbo, vao;
     glGenBuffers(1, &vbo);
@@ -172,13 +97,13 @@ int main() {
     glEnableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
-    
+
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    
+
     const char* vert_shader = R"(
         #version 410 core
         layout (location=0) in vec3 vp;
@@ -188,21 +113,67 @@ int main() {
         uniform mat4 model;
         uniform mat4 transform;
         out vec3 Normal;
+        out vec3 FragPos; 
+
+
+
         void main() {
             gl_Position = projection * view * model * transform * vec4(vp, 1.0);
-            Normal =aNormal;
+            FragPos = vec3(model * vec4(aPos, 1.0));
+            Normal =aNormal * normalMatrix;
         }
     )";
 
     const char* frag_shader = R"(
         #version 410 core
         in vec3 Normal;
+        in vec3 FragPos;
 
         uniform float time;
+        uniform vec3 viewPos;
 
         out vec4 myColor;
 
+        strict Light_st{
+        vec3 position;
+        vec3 ambient;
+        vec3 specular;
+        vec3 diffuse;
+        };
+
+        uniform Light_st light;
+
+
+        strict Material{
+        float shininess;
+        vec3 ambient;
+        vec3 specular;
+        vec3 diffuse;   
+        };
+
+        uniform Material material;
+            
         void main() {
+            //amb
+            ambient = light_ambient * material.ambient;
+            
+            //diff
+            norm = normalize(Normal);
+            lightDir = normilize(light.position - FragPos);
+            float diff = max(dot(norm, lightDir), 0.0);
+            diffuse = light_diffuse;
+            
+            
+            
+            //spec
+            viewDir = normilize(viewPos - FragPos);
+            lightDir = reflect(-lightDir, norm);
+            float diff = max(dot(viewDir, reflectionDir), 0.0), material.shininess);
+            specular = light_specular;
+            
+                vec3 Sum = ambient * diffuse * specular;
+            FragColor = vec4 (Sum, 1.0);        
+            
             float r = (sin(time) + 1.0) / 2.0;
             float g = (cos(time * 0.7) + 1.0) / 2.0;
             float b = (sin(time * 1.3) + 1.0) / 2.0;
@@ -244,7 +215,26 @@ int main() {
 
     GLint timeLoc = glGetUniformLocation(program, "time");
 
-  
+
+    glm::vec3 light_position = glm::vec3(0.0, 0.0, 4.0);
+
+
+    glm::vec3 ambient = glm::vec3(0.1) * light_color;
+    glm::vec3 specular = glm::vec3(0.1) * light_color;
+    glm::vec3 diffuse = glm::vec3(0.5) * light_color;
+
+    lightShader.setVec3("material.ambient", 1.0f, 0.5f, 0.31f);
+    lightShader.setVec3("material.diffuse", 1.0f, 0.5f, 0.31f);
+    lightShader.setVec3("material.specular", 0.5f, 0.5f, 0.5f);
+    lightShader.setVec3("material.shininess", 32.0f);
+    
+    ourShader.setvec3("light_position", light_position);
+    ourShader.setvec3("ambient", light_position);
+    ourShader.setvec3("specular", light_position);
+    ourShader.setvec3("diffuse", light_position);
+    ourShader.setvec3("viewPos", CameraPos);
+
+
 
     while (!glfwWindowShouldClose(window)) {
         float timeValue = glfwGetTime();
@@ -262,6 +252,9 @@ int main() {
         glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 transform = glm::mat4(1.0f);
 
+        glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+        lightShader.setMat3("normalMatrix", normalMatrix);
+
         glUseProgram(program);
         glUniform1f(timeLoc, timeValue);
         setMat4(program, "projection", projection);
@@ -273,9 +266,10 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT);
 
         glBindVertexArray(vao);
-       
+
         glDrawArrays(GL_TRIANGLE_FAN, 0, 10);
 
+        ourRTC.Draw();
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -289,15 +283,15 @@ int main() {
 
 void processInput(GLFWwindow* win) {
 
-    const float cameraSpeed = 2.5f *deltaTime;
+    const float cameraSpeed = 2.5f * deltaTime;
     if (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS)
         cameraPos += cameraSpeed * cameraFront;
 
     if (glfwGetKey(win, GLFW_KEY_S) == GLFW_PRESS)
-        cameraPos-= cameraSpeed * cameraFront;
+        cameraPos -= cameraSpeed * cameraFront;
 
     if (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS)
-       cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp))*cameraSpeed;
+        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
 
     if (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS)
         cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
@@ -307,7 +301,7 @@ void processInput(GLFWwindow* win) {
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
-       
+
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
 
@@ -319,7 +313,7 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     }
 
     float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos;  
+    float yoffset = lastY - ypos;
     lastX = xpos;
     lastY = ypos;
 
@@ -330,7 +324,7 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     yaw += xoffset;
     pitch += yoffset;
 
-   
+
     if (pitch > 89.0f)
         pitch = 89.0f;
     if (pitch < -89.0f)
@@ -357,99 +351,3 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
 }
-
-
-_________________________________________________________________________________________________
-
-
-
-#ifndef MODEL_H
-#define MODEL_H
-
-
-
-
-#include <glm.hpp>
-#include <gtc/matrix_transform.hpp>
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
-
-#include "Mesh.h"
-
-#include <string>
-#include <fstream>
-#include <sstream>
-#include <iostream>
-#include <vector>
-using namespace std;
-
-class Model
-{
-public:
-    
-    vector<Mesh> meshes;
-    string directory;
-        
-    Model(string const& path) 
-    {
-        loadModel(path);
-    }
-       
-    void Draw()
-    {
-        -
-    }
-
-private:
-    
-    void loadModel(string const& path)
-    {
-        Assimp::Importer importer;
-        
-        directory = path.substr(0, path.find_last_not_of('/'));
-        
-        const aiScene* scene = importer.ReadFile(directory,
-            aiProcess_CalcTangentSpace |
-            aiProcess_Triangulate |
-            aiProcess_JoinIdenticalVertices |
-            aiProcess_SortByPType);
-
-       
-        if (nullptr == scene) {
-            fprintf(stderr, "error ASSimp %s\n", importer.GetErrorString());
-        }
-
-      
-        processNode(scene->mRootNode, scene);
-    }
-        
-    void processNode(aiNode* node, const aiScene* scene)
-    {
-        for (unsigned int i = 0; i < node->mNumMeshes; i++)
-        {
-            aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-            meshes.push_back(processMesh(mesh, scene));
-        }
-
-        for (unsigned int i = 0; i < node->mNumChildren; i++)
-        {
-            processNode(node->mChildren[i], scene);
-        }
-
-    }
-
-    Mesh processMesh(aiMesh* mesh, const aiScene* scene)
-    {
-        return Mesh(vertices, indices);
-    }        
-};
-
-#endif
-____________________________________________________________
-GPT ДОПИШЕТ (ЛАСТ СТР УЖЕ ЕСТЬ)
-
-
-
-
-
