@@ -1,20 +1,20 @@
 #define GLEW_DLL
 #define GLFW_DLL
-#define MODEL_H
-#define MODEL_H
-#define MESH_H
-#define MESH_H
+#define GLM_ENABLE_EXPERIMENTAL
+
 
 #include <iostream>
 #include <cmath>
 #include "GL/glew.h"
 #include "GLFW/glfw3.h"
 #include "glm/glm.hpp"
+#include "glm/gtc/type_ptr.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
+#include "glm/gtc/matrix_inverse.hpp"  
+#include "glm/gtx/transform.hpp"       
 #include "Model.h"
-
-
+#include "Shader.h" 
 
 float vertices[] = {
     0.0f,  0.0f, 0.0f,
@@ -33,33 +33,37 @@ void setMat4(GLuint ID, const std::string& name, const glm::mat4& mat) {
     glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, glm::value_ptr(mat));
 }
 
-glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+
+glm::vec3 cameraPos = glm::vec3(8.0f, 6.0f, 25.0f); 
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
-
 
 void framebuffer_size_callback(GLFWwindow* window, int  width, int height);
 void mouse_callback(GLFWwindow* window, double  xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* win);
 
-
 const unsigned int SCR_WIDTH = 1024;
 const unsigned int SCR_HEIGHT = 768;
 
-float   lastX = SCR_WIDTH / 2,
-lastY = SCR_HEIGHT / 2;
+float   lastX = SCR_WIDTH / 2.0f,
+lastY = SCR_HEIGHT / 2.0f;
 
 bool firstMouse = true;
 float yaw = -90.0f;
 float pitch = 0.0f;
 float fov = 45.0f;
 
-
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-void processInput(GLFWwindow* win);
+glm::mat4 OX1_POS(1.0);
+glm::mat4 OX2_POS(1.0);
+glm::mat4 OX3_POS(1.0);
+
+float OX1_Angle;
+float OX2_Angle;
+float OX3_Angle;
 
 int main() {
     if (!glfwInit()) {
@@ -85,7 +89,7 @@ int main() {
         return -3;
     }
 
-    Model ourRTC("lab3d.blend");
+    Model ourRTC("lab3d.obj");   
 
     GLuint vbo, vao;
     glGenBuffers(1, &vbo);
@@ -103,88 +107,11 @@ int main() {
     glfwSetScrollCallback(window, scroll_callback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-
-    const char* vert_shader = R"(
-        #version 410 core
-        layout (location=0) in vec3 vp;
-        layout (location=1) in vec3 aNormal;
-        uniform mat4 projection;
-        uniform mat4 view;
-        uniform mat4 model;
-        uniform mat4 transform;
-        out vec3 Normal;
-        out vec3 FragPos; 
-
-
-
-        void main() {
-            gl_Position = projection * view * model * transform * vec4(vp, 1.0);
-            FragPos = vec3(model * vec4(aPos, 1.0));
-            Normal =aNormal * normalMatrix;
-        }
-    )";
-
-    const char* frag_shader = R"(
-        #version 410 core
-        in vec3 Normal;
-        in vec3 FragPos;
-
-        uniform float time;
-        uniform vec3 viewPos;
-
-        out vec4 myColor;
-
-        strict Light_st{
-        vec3 position;
-        vec3 ambient;
-        vec3 specular;
-        vec3 diffuse;
-        };
-
-        uniform Light_st light;
-
-
-        strict Material{
-        float shininess;
-        vec3 ambient;
-        vec3 specular;
-        vec3 diffuse;   
-        };
-
-        uniform Material material;
-            
-        void main() {
-            //amb
-            ambient = light_ambient * material.ambient;
-            
-            //diff
-            norm = normalize(Normal);
-            lightDir = normilize(light.position - FragPos);
-            float diff = max(dot(norm, lightDir), 0.0);
-            diffuse = light_diffuse;
-            
-            
-            
-            //spec
-            viewDir = normilize(viewPos - FragPos);
-            lightDir = reflect(-lightDir, norm);
-            float diff = max(dot(viewDir, reflectionDir), 0.0), material.shininess);
-            specular = light_specular;
-            
-                vec3 Sum = ambient * diffuse * specular;
-            FragColor = vec4 (Sum, 1.0);        
-            
-            float r = (sin(time) + 1.0) / 2.0;
-            float g = (cos(time * 0.7) + 1.0) / 2.0;
-            float b = (sin(time * 1.3) + 1.0) / 2.0;
-            myColor = vec4(r, g, b, 1.0);
-        }
-    )";
+   
 
     GLuint vertS = glCreateShader(GL_VERTEX_SHADER);
     GLuint fragS = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(vertS, 1, &vert_shader, NULL);
-    glShaderSource(fragS, 1, &frag_shader, NULL);
+    
     glCompileShader(vertS);
     glCompileShader(fragS);
 
@@ -213,31 +140,29 @@ int main() {
     glDeleteShader(vertS);
     glDeleteShader(fragS);
 
-    GLint timeLoc = glGetUniformLocation(program, "time");
-
-
-    glm::vec3 light_position = glm::vec3(0.0, 0.0, 4.0);
-
-
-    glm::vec3 ambient = glm::vec3(0.1) * light_color;
-    glm::vec3 specular = glm::vec3(0.1) * light_color;
-    glm::vec3 diffuse = glm::vec3(0.5) * light_color;
-
-    lightShader.setVec3("material.ambient", 1.0f, 0.5f, 0.31f);
-    lightShader.setVec3("material.diffuse", 1.0f, 0.5f, 0.31f);
-    lightShader.setVec3("material.specular", 0.5f, 0.5f, 0.5f);
-    lightShader.setVec3("material.shininess", 32.0f);
     
-    ourShader.setvec3("light_position", light_position);
-    ourShader.setvec3("ambient", light_position);
-    ourShader.setvec3("specular", light_position);
-    ourShader.setvec3("diffuse", light_position);
-    ourShader.setvec3("viewPos", CameraPos);
 
+    Shader shaderProgram("shader.vert", "shader.frag");
 
+ 
+    GLint timeLoc = glGetUniformLocation(shaderProgram.ID, "time");
+    GLint viewPosLoc = glGetUniformLocation(shaderProgram.ID, "viewPos");
+    GLint lightPosLoc = glGetUniformLocation(shaderProgram.ID, "light.position");
+    GLint lightAmbLoc = glGetUniformLocation(shaderProgram.ID, "light.ambient");
+    GLint lightDiffLoc = glGetUniformLocation(shaderProgram.ID, "light.diffuse");
+    GLint lightSpecLoc = glGetUniformLocation(shaderProgram.ID, "light.specular");
+    GLint matAmbLoc = glGetUniformLocation(shaderProgram.ID, "material.ambient");
+    GLint matDiffLoc = glGetUniformLocation(shaderProgram.ID, "material.diffuse");
+    GLint matSpecLoc = glGetUniformLocation(shaderProgram.ID, "material.specular");
+    GLint matShinLoc = glGetUniformLocation(shaderProgram.ID, "material.shininess");
+
+ 
+    glm::vec3 lightPos(0.0f, 0.0f, 26.0f);
+    glm::vec3 lightColor(1.0f, 1.0f, 1.0f);
+   
 
     while (!glfwWindowShouldClose(window)) {
-        float timeValue = glfwGetTime();
+        float timeValue = static_cast<float>(glfwGetTime());  
 
         processInput(window);
 
@@ -246,67 +171,87 @@ int main() {
         lastFrame = currentFrame;
 
         glm::mat4 projection = glm::perspective(glm::radians(fov), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-
         glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 transform = glm::mat4(1.0f);
 
         glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
-        lightShader.setMat3("normalMatrix", normalMatrix);
 
-        glUseProgram(program);
+        shaderProgram.Use();
         glUniform1f(timeLoc, timeValue);
-        setMat4(program, "projection", projection);
-        setMat4(program, "view", view);
-        setMat4(program, "model", model);
-        setMat4(program, "transform", transform);
+        setMat4(shaderProgram.ID, "projection", projection);
+        setMat4(shaderProgram.ID, "view", view);
+        setMat4(shaderProgram.ID, "model", model);
+        setMat4(shaderProgram.ID, "transform", transform);
+
+        
+        glUniformMatrix3fv(glGetUniformLocation(shaderProgram.ID, "normalMatrix"),1, GL_FALSE, glm::value_ptr(normalMatrix));
+
+      
+        glUniform3fv(viewPosLoc, 1, glm::value_ptr(cameraPos));
+        glUniform3fv(lightPosLoc, 1, glm::value_ptr(lightPos));
+        glUniform3fv(lightAmbLoc, 1, glm::value_ptr(glm::vec3(0.2f) * lightColor));
+        glUniform3fv(lightDiffLoc, 1, glm::value_ptr(glm::vec3(0.5f) * lightColor));
+        glUniform3fv(lightSpecLoc, 1, glm::value_ptr(glm::vec3(0.5f) * lightColor));
+
+       
+        glUniform3fv(matAmbLoc, 1, glm::value_ptr(glm::vec3(0.2f, 0.2f, 0.2f)));
+        glUniform3fv(matDiffLoc, 1, glm::value_ptr(glm::vec3(0.8f, 0.8f, 0.8f)));
+        glUniform3fv(matSpecLoc, 1, glm::value_ptr(glm::vec3(0.5f, 0.5f, 0.5f)));
+        glUniform1f(matShinLoc, 32.0f);
+
+        ourModel.Draw(lightShader, OX1_POS, OX2_POS, OX3_POS);
 
         glClearColor(0.1f, 0.2f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glBindVertexArray(vao);
+        //glBindVertexArray(vao);
+        //glDrawArrays(GL_TRIANGLE_FAN, 0, 10);
 
-        glDrawArrays(GL_TRIANGLE_FAN, 0, 10);
-
-        ourRTC.Draw();
+        ourRTC.Draw();   
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     glDeleteVertexArrays(1, &vao);
     glDeleteBuffers(1, &vbo);
-    glDeleteProgram(program);
+    
     glfwTerminate();
     return 0;
 }
 
 void processInput(GLFWwindow* win) {
-
     const float cameraSpeed = 2.5f * deltaTime;
     if (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS)
         cameraPos += cameraSpeed * cameraFront;
-
     if (glfwGetKey(win, GLFW_KEY_S) == GLFW_PRESS)
         cameraPos -= cameraSpeed * cameraFront;
-
     if (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS)
         cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-
     if (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS)
         cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
 
+    if (glfwGetKey(win, GLFW_KEY_N) == GLFW_PRESS) {
+
+        float NewAngle = OX1_Angle - deltaTime * 50;
+        OX1_POS = glm::rotate(glm::mat4(1.0), glm::radians(NewAngle), glm::vec3(0, 1, 0));
+        OX1_Angle = NewAngle;
+    }
+    
+    if(glfwGetKey(win, GLFW_KEY_M) == GLFW_PRESS) {
+
+        float NewAngle = OX1_Angle + deltaTime * 50;
+        OX1_POS = glm::rotate(glm::mat4(1.0), glm::radians(NewAngle), glm::vec3(0, 1, 0));
+        OX1_Angle = NewAngle;
+    }
+
 }
 
-
-void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
-{
-
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
 
-    if (firstMouse)
-    {
+    if (firstMouse) {
         lastX = xpos;
         lastY = ypos;
         firstMouse = false;
@@ -324,11 +269,8 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     yaw += xoffset;
     pitch += yoffset;
 
-
-    if (pitch > 89.0f)
-        pitch = 89.0f;
-    if (pitch < -89.0f)
-        pitch = -89.0f;
+    if (pitch > 89.0f)  pitch = 89.0f;
+    if (pitch < -89.0f) pitch = -89.0f;
 
     glm::vec3 front;
     front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
@@ -337,17 +279,357 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     cameraFront = glm::normalize(front);
 }
 
-
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
-{
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     fov -= (float)yoffset;
-    if (fov < 1.0f)
-        fov = 1.0f;
-    if (fov > 45.0f)
-        fov = 45.0f;
+    if (fov < 1.0f)  fov = 1.0f;
+    if (fov > 45.0f) fov = 45.0f;
 }
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
+}
+
+
+#ifndef MESH_H
+#define MESH_H
+
+
+#include <glm.hpp>
+#include <gtc/matrix_transform.hpp>
+
+#include "GL/glew.h"
+#include "GLFW/glfw3.h"
+
+#include "Shader.h"
+#include <vector>
+#include <glm.hpp>
+
+
+using namespace std;
+
+struct Vertex {
+    // position
+    glm::vec3 Position;
+    // normal
+    glm::vec3 Normal;
+};
+
+class Mesh {
+public:
+    vector <Vertex>       vertices;
+    vector <unsigned int> indices;
+    unsigned int VAO;
+
+    Mesh(vector<Vertex> vertices, vector<unsigned int> indices)
+    {
+        this->vertices = vertices;
+        this->indices = indices;
+
+        setupMesh();
+    }
+
+    void Draw(Shader shader)
+    {
+        shader.use();
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+    }
+
+private:
+    unsigned int VBO, EBO;
+
+    void setupMesh()
+    {
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+        glGenBuffers(1, &EBO);  
+
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW); 
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);  
+
+       
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
+    }
+};
+#endif
+
+
+#ifndef MODEL_H
+#define MODEL_H
+
+
+
+
+#include <glm.hpp>
+#include <gtc/matrix_transform.hpp>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+
+#include "Mesh.h"
+#include "Shader.h"
+
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <iostream>
+#include <vector>
+using namespace std;
+
+class Model
+{
+public:
+
+    vector<Mesh> meshes;
+    string directory;
+
+    Model(string const& path)
+    {
+        loadModel(path);
+    }
+
+    void Draw( Shader shader, glm::mat4 OX1_transform, glm::mat4 OX2_transform, glm::mat4 OX3_transform)
+    {
+        for (unsigned int i = 0; i < meshes.size(); i++)
+        {
+            switch (i)
+            {
+            case 1:
+                glm::mat4 minus_line_translate = glm::translate(glm::mat4(1.0), glm::vec3(0.0, 0.0, -0.76534234));// смотрим как у нaс
+                glm::mat4 line_translate = glm::translate(glm::mat4(1.0), glm::vec3(0.0, 0.0, 0.76534234));
+                glm::mat4 Result_OX1 = line_translate * OX1_transform * minus_line_translate;
+                shader.setMat4("model", Result_OX1);
+                break;
+            case 2:
+                glm::mat4 minus_line_translate_OX2 = glm::translate(glm::mat4(1.0), glm::vec3(0.0, 0.0, -0.76534234));// смотрим как у нaс
+                glm::mat4 line_translate_OX2 = glm::translate(glm::mat4(1.0), glm::vec3(0.0, 0.0, 0.76534234));
+                glm::mat4 Result_OX2 =  OX1_transform * line_translate_OX2* OX2_transform * minus_line_translate_OX2;
+                shader.setMat4("model", Result_OX2);
+                break;
+            case 3:
+                break;
+            default:
+                shader.setMat4("model", glm::mat3(1.0));
+                break;
+            }
+
+
+
+
+            meshes[i].Draw(shader);
+        }
+    }
+
+private:
+
+    void loadModel(string const& path)
+    {
+        Assimp::Importer importer;
+
+        directory = path.substr(0, path.find_last_of('/'));
+
+        const aiScene* scene = importer.ReadFile(directory,
+            aiProcess_CalcTangentSpace |
+            aiProcess_Triangulate |
+            aiProcess_JoinIdenticalVertices |
+            aiProcess_SortByPType);
+
+
+        if (nullptr == scene) {
+            fprintf(stderr, "error ASSimp %s\n", importer.GetErrorString());
+            return;
+        }
+
+
+        processNode(scene->mRootNode, scene);
+    }
+
+    void processNode(aiNode* node, const aiScene* scene)
+    {
+        for (unsigned int i = 0; i < node->mNumMeshes; i++)
+        {
+            aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+            meshes.push_back(processMesh(mesh, scene));
+        }
+
+        for (unsigned int i = 0; i < node->mNumChildren; i++)
+        {
+            processNode(node->mChildren[i], scene);
+        }
+
+    }
+
+    Mesh processMesh(aiMesh* mesh, const aiScene* scene)
+    {
+        vector <Vertex>       vertices;
+        vector <unsigned int> indices;
+
+        for (unsigned int i = 0; i < mesh->mNumVertices; i++)
+        {
+            Vertex vert_buffer;
+            glm::vec3 vector;
+            vector.x = mesh->mVertices[i].x;
+            vector.y = mesh->mVertices[i].y;
+            vector.z = mesh->mVertices[i].z;
+            vert_buffer.Position = vector;
+
+            if (mesh->HasNormals()) {
+                vector.x = mesh->mNormals[i].x;
+                vector.y = mesh->mNormals[i].y;
+                vector.z = mesh->mNormals[i].z;
+                vert_buffer.Normal = vector;
+            }
+
+            vertices.push_back(vert_buffer);
+
+        }
+
+        for (unsigned int i = 0; i < mesh->mNumFaces; i++)
+        {
+            aiFace face = mesh->mFaces[i];
+
+            for ( int j = 0; j < face.mNumIndices; j++) {
+
+                indices.push_back(face.mIndices[j]);
+
+            }
+        }
+
+        return Mesh(vertices, indices);
+    }
+};
+
+#endif
+
+
+#include "Shader.h"
+
+Shader::Shader(const GLchar* vertexPath, const GLchar* fragmentPath)
+{
+    std::string vertexCode;
+    std::string fragmentCode;
+    std::ifstream vShaderFile;
+    std::ifstream fShaderFile;
+
+    vShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    fShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+
+    try {
+        vShaderFile.open(vertexPath);
+        fShaderFile.open(fragmentPath);
+
+        std::stringstream vShaderStream, fShaderStream;
+        vShaderStream << vShaderFile.rdbuf();
+        fShaderStream << fShaderFile.rdbuf();
+
+        vShaderFile.close();
+        fShaderFile.close();
+
+        vertexCode = vShaderStream.str();
+        fragmentCode = fShaderStream.str();
+    }
+    catch (std::ifstream::failure e) {
+        std::cout << "ERROR::SHADER::FILE_NOT_SUCCESFULLY_READ" << std::endl;
+    }
+
+    const GLchar* vShaderCode = vertexCode.c_str();
+    const GLchar* fShaderCode = fragmentCode.c_str();
+
+    GLuint vertex, fragment;
+    GLint success;
+    GLchar infoLog[1024];
+
+    vertex = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertex, 1, &vShaderCode, NULL);
+    glCompileShader(vertex);
+
+    glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(vertex, 1024, NULL, infoLog);
+        std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << "\n";
+    }
+
+    fragment = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragment, 1, &fShaderCode, NULL);
+    glCompileShader(fragment);
+
+    glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(fragment, 1024, NULL, infoLog);
+        std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << "\n";
+    }
+
+    ID = glCreateProgram();
+    glAttachShader(ID, vertex);
+    glAttachShader(ID, fragment);
+    glLinkProgram(ID);
+
+    glGetProgramiv(ID, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(ID, 1024, NULL, infoLog);
+        std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << "\n";
+    }
+
+    glDeleteShader(vertex);
+    glDeleteShader(fragment);
+}
+
+void Shader::Use() {
+    glUseProgram(ID);
+}
+
+void Shader::setBool(const std::string& name, bool value) const {
+    glUniform1i(glGetUniformLocation(ID, name.c_str()), (int)value);
+}
+
+void Shader::setInt(const std::string& name, int value) const {
+    glUniform1i(glGetUniformLocation(ID, name.c_str()), value);
+}
+
+void Shader::setFloat(const std::string& name, float value) const {
+    glUniform1f(glGetUniformLocation(ID, name.c_str()), value);
+}
+
+void Shader::setVec2(const std::string& name, float x, float y) const {
+    glUniform2f(glGetUniformLocation(ID, name.c_str()), x, y);
+}
+
+void Shader::setVec3(const std::string& name, float x, float y, float z) const {
+    glUniform3f(glGetUniformLocation(ID, name.c_str()), x, y, z);
+}
+
+void Shader::setVec4(const std::string& name, float x, float y, float z, float w) const {
+    glUniform4f(glGetUniformLocation(ID, name.c_str()), x, y, z, w);
+}
+
+void Shader::setVec2v(const std::string& name, const float* value) const {
+    glUniform2fv(glGetUniformLocation(ID, name.c_str()), 1, value);
+}
+
+void Shader::setVec3v(const std::string& name, const float* value) const {
+    glUniform3fv(glGetUniformLocation(ID, name.c_str()), 1, value);
+}
+
+void Shader::setVec4v(const std::string& name, const float* value) const {
+    glUniform4fv(glGetUniformLocation(ID, name.c_str()), 1, value);
+}
+
+
+void Shader::setMat4(const std::string& name, const glm::mat4& value) const {
+    glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));
+}
+
+
+void Shader::setMat3(const std::string& name, const glm::mat3& value) const {
+    glUniformMatrix3fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));
 }
